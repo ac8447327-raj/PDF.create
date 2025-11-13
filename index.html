@@ -1,190 +1,52 @@
-<!doctype html>
-<html lang="hi">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>School Pages → PDF (Face pixelate)</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>School Copy to PDF</title>
   <style>
-    body { font-family: Arial, sans-serif; margin:16px; background:#fafafa; color:#111; }
-    h1 { font-size:20px; margin-bottom:8px; }
-    #controls { margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap; }
-    input[type=file] { display:block; }
-    #preview { display:flex; flex-direction:column; gap:16px; max-width:100%; }
-    .card { background:#fff; padding:8px; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,0.08); }
-    canvas { max-width:100%; border:1px solid #eee; display:block; }
-    .hint { color:#666; font-size:13px; margin-top:6px; }
-    button { padding:8px 12px; border-radius:6px; border: none; background:#2563eb; color:white; cursor:pointer; }
-    button.secondary { background:#6b7280; }
-    .tool-row { display:flex; gap:8px; align-items:center; margin-top:6px; flex-wrap:wrap; }
-    .size-input { width:64px; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #fafafa;
+      text-align: center;
+      padding: 20px;
+    }
+    .box {
+      background: white;
+      display: inline-block;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+    input, button {
+      margin: 10px;
+    }
+    button {
+      background: #007bff;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
+    }
   </style>
 </head>
 <body>
-  <h1>School pages → PDF (face pixelate tool)</h1>
+  <h2>📚 School Pages → PDF Generator</h2>
 
-  <div id="controls" class="card">
-    <div>
-      <label><strong>Upload photos (multiple):</strong></label><br>
-      <input id="fileInput" type="file" accept="image/*" multiple />
-      <div class="hint">Photos ka order wahi rahega jo aap select karenge.</div>
-    </div>
-
-    <div>
-      <label><strong>Pixelate size (px):</strong></label><br>
-      <input id="pixelSize" class="size-input" type="number" value="12" min="2" />
-      <div class="hint">Badi value = zyada pixelated (more blur)</div>
-    </div>
-
-    <div style="align-self:center;">
-      <div class="tool-row">
-        <button id="generatePdfBtn">Generate PDF</button>
-        <button id="clearBtn" class="secondary">Clear</button>
-      </div>
-      <div class="hint">Canvas par click karein jahan aap pixelate karna chahte hain. Click karne par rectangle apply hota hai.</div>
-    </div>
+  <div class="box">
+    <p><b>Upload photos:</b></p>
+    <input type="file" id="file-input" multiple accept="image/*">
+    <br>
+    <button id="generate">Generate PDF</button>
   </div>
 
-  <div id="preview"></div>
-
-  <!-- jsPDF and html2canvas (CDN) -->
+  <!-- Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script>
-    const fileInput = document.getElementById('fileInput');
-    const preview = document.getElementById('preview');
-    const pixelSizeInput = document.getElementById('pixelSize');
-    const generatePdfBtn = document.getElementById('generatePdfBtn');
-    const clearBtn = document.getElementById('clearBtn');
-
-    // Keep array of {img, canvas, ctx, width, height}
-    const pages = [];
-
-    fileInput.addEventListener('change', async (e) => {
-      preview.innerHTML = '';
-      pages.length = 0;
-      const files = Array.from(e.target.files);
-      for (const f of files) {
-        if (!f.type.startsWith('image/')) continue;
-        const url = URL.createObjectURL(f);
-        await addImageToPreview(url);
-      }
-    });
-
-    async function addImageToPreview(src) {
-      return new Promise((res) => {
-        const img = new Image();
-        img.onload = () => {
-          // create canvas sized to image (limit width to 1200 for performance)
-          const maxWidth = 1200;
-          const ratio = Math.min(1, maxWidth / img.width);
-          const w = Math.round(img.width * ratio);
-          const h = Math.round(img.height * ratio);
-
-          const canvas = document.createElement('canvas');
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, w, h);
-
-          const wrapper = document.createElement('div');
-          wrapper.className = 'card';
-          const info = document.createElement('div');
-          info.style.marginBottom = '6px';
-          info.textContent = Page — ${pages.length + 1} (${w}×${h}) — Click canvas to add pixelate box;
-          wrapper.appendChild(info);
-          wrapper.appendChild(canvas);
-          preview.appendChild(wrapper);
-
-          // register click to pixelate region
-          canvas.addEventListener('click', (ev) => {
-            const rect = canvas.getBoundingClientRect();
-            const x = Math.round((ev.clientX - rect.left) * (canvas.width / rect.width));
-            const y = Math.round((ev.clientY - rect.top) * (canvas.height / rect.height));
-            // default box size proportional to image
-            const boxW = Math.round(canvas.width * 0.2);
-            const boxH = Math.round(canvas.height * 0.18);
-            const box = {
-              x: Math.max(0, x - Math.round(boxW/2)),
-              y: Math.max(0, y - Math.round(boxH/2)),
-              w: Math.min(boxW, canvas.width),
-              h: Math.min(boxH, canvas.height)
-            };
-            applyPixelate(ctx, box, parseInt(pixelSizeInput.value || '12'));
-          });
-
-          pages.push({ img, canvas, ctx, w, h });
-          res();
-        };
-        img.onerror = () => res();
-        img.src = src;
-      });
-    }
-
-    function applyPixelate(ctx, rect, pixelSize) {
-      // get image data for the rect
-      const { x, y, w, h } = rect;
-      // create temp canvas
-      const tmp = document.createElement('canvas');
-      tmp.width = w;
-      tmp.height = h;
-      const tctx = tmp.getContext('2d');
-      // draw portion
-      tctx.drawImage(ctx.canvas, x, y, w, h, 0, 0, w, h);
-      // pixelate by scaling down then up
-      const sx = Math.max(1, Math.floor(w / pixelSize));
-      const sy = Math.max(1, Math.floor(h / pixelSize));
-      const small = document.createElement('canvas');
-      small.width = sx;
-      small.height = sy;
-      const sctx = small.getContext('2d');
-
-      // draw small
-      sctx.drawImage(tmp, 0, 0, w, h, 0, 0, sx, sy);
-      // draw back to tmp scaled up (nearest neighbor)
-      tctx.imageSmoothingEnabled = false;
-      tctx.clearRect(0,0,w,h);
-      tctx.drawImage(small, 0, 0, sx, sy, 0, 0, w, h);
-
-      // overlay back to main canvas
-      ctx.drawImage(tmp, 0, 0, w, h, x, y, w, h);
-      // optionally draw a faint border to show area
-      ctx.save();
-      ctx.strokeStyle = 'rgba(0,0,0,0.06)';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x+1, y+1, w-2, h-2);
-      ctx.restore();
-    }
-
-    generatePdfBtn.addEventListener('click', async () => {
-      if (pages.length === 0) return alert('Koi photo upload nahi hai.');
-      // Use jspdf. Each image becomes one page. Use A4 portrait.
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({ unit: 'pt', format: 'a4' }); // 595x842 pts
-      const a4w = 595;
-      const a4h = 842;
-
-      for (let i = 0; i < pages.length; i++) {
-        const page = pages[i];
-        // convert canvas to dataURL (JPEG)
-        const dataUrl = page.canvas.toDataURL('image/jpeg', 0.92);
-        // calculate fit size keeping aspect ratio
-        const ratio = Math.min(a4w / page.w, a4h / page.h);
-        const imgW = page.w * ratio;
-        const imgH = page.h * ratio;
-        const x = (a4w - imgW) / 2;
-        const y = (a4h - imgH) / 2;
-
-        if (i > 0) doc.addPage();
-        doc.addImage(dataUrl, 'JPEG', x, y, imgW, imgH);
-      }
-
-      doc.save('school-pages.pdf');
-    });
-
-    clearBtn.addEventListener('click', () => {
-      preview.innerHTML = '';
-      pages.length = 0;
-      fileInput.value = '';
-    });
-  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
